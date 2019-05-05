@@ -17,7 +17,7 @@
  *    Date        Who            What
  *    ----        ---            ----
  *    2018-06-02  Dan Ogorchock  Revised/Simplified for Hubitat Composite Driver Model
- *    2019-05-05  CSC			 Display the remaining water in tank in % and remaining water in liters
+ *    2019-05-05  CSC		 Display the remaining water in tank in % and remaining water in liters
  *
  * 
  */
@@ -63,9 +63,7 @@ def parse(String description) {
         double sensorValue = value as float
         double capacityValue = 100 - (sensorValue/height * 100 )
         if(capacityValue != 100)
-        {
-            capacityValue = capacityValue.round(2)
-            
+        {            
             /*added by CSC - start*/
             //how much % left based on the height
             capacityValue = (height - sensorValue) / height *100
