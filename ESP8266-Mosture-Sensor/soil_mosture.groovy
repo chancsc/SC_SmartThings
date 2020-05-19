@@ -10,34 +10,20 @@
 */
 
 metadata {
-    definition (name: "ESP8266 Moisture Sensor", namespace: "cschwer", author: "Charles Schwer") {
+    definition (name: "ESP8266 Moisture Sensor", namespace: "sc", author: "Soon Chye") {
         capability "Sensor"
         capability "waterSensor"
+//        capability "Configuration"
         
         attribute "lastUpdated", "String"
+        attribute "sensorValue", "String"
     }
  
-    // simulator metadata
     simulator {}
- 
- /*
-    // UI tile definitions
-    tiles (scale: 2) {
-        standardTile("water", "device.water", width: 2, height: 2) {
-            state("wet", label:'${name}', icon:"st.water.water.wet", backgroundColor:"#0000FF")
-            state("ok", label:'${name}', icon:"st.water.water.ok", backgroundColor:"#79b821")
-            state("dry", label:'${name}', icon:"st.water.water.dry", backgroundColor:"#ffa81e")
-       }
-        main "water"
-        details (["water", "refresh"])
-        //details (["water"]) 
- }
-*/
 
 	tiles(scale: 2) {
-		multiAttributeTile(name:"moistureStatus", type: "lighting", width: 6, height: 4, canChangeIcon: false) {
+		multiAttributeTile(name:"moistureStatus", type: "water", width: 6, height: 4, canChangeIcon: false) {
 			tileAttribute ("device.moistureStatus", key: "PRIMARY_CONTROL") {
-				//attributeState("default", label:'Moisture', backgroundColor:"#79b821", icon:"")
                 attributeState("wet", label:'${name}', backgroundColor:"#0000FF")
                 attributeState("ok", label:'${name}', backgroundColor:"#79b821")
                 attributeState("dry", label:'${name}', backgroundColor:"#ffa81e")
@@ -47,13 +33,19 @@ metadata {
 			}
 		}
 
-		main (["moistureStatus"])
+//		valueTile("sensorValue", "water", decoration: "flat", inactiveLabel: false, width: 2, height: 2) {
+//			state "sensorValue", label: 'Sensor: ${currentValue}%', unit: ""
+//		}
+
+		//main (["moistureStatus", "sensorValue"])
+        main (["moistureStatus"])
 		details(["moistureStatus","lastCheckin"])
 	}
     preferences {
         input("ip", "text", title: "IP Address", description: "ip", required: true)
         input("port", "number", title: "Port", description: "port", default: 9060, required: true)
         input("mac", "text", title: "MAC Addr (e.g. AB50E360E123)", description: "mac")
+//		input "alert", "number", title: "Dry Alert threshold", description: "Define the Threshold for Dry", range: "1..500", displayDuringSetup: false
     }
 }
 def updated() {
@@ -75,31 +67,30 @@ def parse(String description) {
     
     def result = []
     def bodyString = msg.body
-    def value = ""
+    def jvalue = ""
     if (bodyString) {
         def json = msg.json;
 		//for debug
 		if (json) {
-        	log.debug("Value received: ${json}")
+//        	log.debug("Value received: ${json}")
             log.debug("Value received: ${json.value}")
         }
         if( json?.name == "moisture") {
-        //    value = json.status == 1 ? "wet" : "dry"
             
             if (json.value >= 900) {
-            	value = "dry"
+            	jvalue = "dry"
             }
             else if (json.value >= 650) {
-            	value = "ok"
+            	jvalue = "ok"
             }
             else if (json.value >= 400) {
-            	value = "wet"
+            	jvalue = "wet"
             }
                 
-            log.debug "moisture status: ${value}"
-            //result << createEvent(name: "soil", value: value)
-            //sendEvent(name: "moistureStatus", value: ${value})
-            sendEvent(name: "moistureStatus", value: "${value}", isStateChange: true, display: false)
+            log.debug "moisture status: ${jvalue}"
+            
+            sendEvent(name: "sensorValue", value: "${json.value}", isStateChange: true, display: false)
+            sendEvent(name: "moistureStatus", value: "${jvalue}", isStateChange: true, display: false)
         }
     }
     
