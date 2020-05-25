@@ -2,8 +2,9 @@
  *  ESP8266 Soil Moisture Sensor
  *  Device Handler for SmartThings
  *  Version
- *	1.0.0 - initial version
+ *  1.0.0 - initial version
  *  1.0.1 - update the definition if less than 400
+ *  1.0.2 - add tile to display sensor value
  *  Author: Soon Chye 2020
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -26,6 +27,7 @@ metadata {
 	tiles(scale: 2) {
 		multiAttributeTile(name:"moistureStatus", type: "water", width: 6, height: 4, canChangeIcon: false) {
 			tileAttribute ("device.moistureStatus", key: "PRIMARY_CONTROL") {
+                attributeState("very wet", label:'${name}', backgroundColor:"#00008B")
                 attributeState("wet", label:'${name}', backgroundColor:"#0000FF")
                 attributeState("ok", label:'${name}', backgroundColor:"#79b821")
                 attributeState("dry", label:'${name}', backgroundColor:"#ffa81e")
@@ -35,13 +37,13 @@ metadata {
 			}
 		}
 
-//		valueTile("sensorValue", "water", decoration: "flat", inactiveLabel: false, width: 2, height: 2) {
-//			state "sensorValue", label: 'Sensor: ${currentValue}%', unit: ""
-//		}
+		valueTile("sensorValue", "device.sensorValue", inactiveLabel: false, decoration: "flat", width: 2, height: 2) {
+			state "sensorValue", label: 'Sensor: ${currentValue} ', unit: ""
+		}
 
-		//main (["moistureStatus", "sensorValue"])
         main (["moistureStatus"])
-		details(["moistureStatus","lastCheckin"])
+//		details(["moistureStatus","lastCheckin"])
+		details(["moistureStatus","lastCheckin", "sensorValue"])
 	}
     preferences {
         input("ip", "text", title: "IP Address", description: "ip", required: true)
