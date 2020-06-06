@@ -2,9 +2,10 @@
  *  ESP8266 Soil Moisture Sensor
  *  Device Handler for SmartThings
  *  Version
- *  1.0.0 - initial version
+ *	1.0.0 - initial version
  *  1.0.1 - update the definition if less than 400
  *  1.0.2 - add tile to display sensor value
+ *  1.0.3 - add option to define Dry Threshold in settings
  *  Author: Soon Chye 2020
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -16,7 +17,6 @@ metadata {
     definition (name: "ESP8266 Moisture Sensor", namespace: "sc", author: "Soon Chye") {
         capability "Sensor"
         capability "waterSensor"
-//        capability "Configuration"
         
         attribute "lastUpdated", "String"
         attribute "sensorValue", "String"
@@ -42,14 +42,13 @@ metadata {
 		}
 
         main (["moistureStatus"])
-//		details(["moistureStatus","lastCheckin"])
 		details(["moistureStatus","lastCheckin", "sensorValue"])
 	}
     preferences {
         input("ip", "text", title: "IP Address", description: "ip", required: true)
-        input("port", "number", title: "Port", description: "port", default: 9060, required: true)
+        input("port", "number", title: "Port", description: "port", default: 80, required: true)
         input("mac", "text", title: "MAC Addr (e.g. AB50E360E123)", description: "mac")
-//		input "alert", "number", title: "Dry Alert threshold", description: "Define the Threshold for Dry", range: "1..500", displayDuringSetup: false
+		input("dryOffset", "number", title: "Dry Threshold (500 - 1024)", description: "Define the Threshold for Dry", range: "500..1024", displayDuringSetup: false, required: true, defaultValue: 900)
     }
 }
 def updated() {
@@ -72,6 +71,14 @@ def parse(String description) {
     def result = []
     def bodyString = msg.body
     def jvalue = ""
+    
+    def dry = 900
+    def ok = 650
+    def wet = 400
+    
+    //overwrite the dry value, get from reference
+    dry = dryOffset
+    
     if (bodyString) {
         def json = msg.json;
 		//for debug
@@ -79,9 +86,9 @@ def parse(String description) {
 //        	log.debug("Value received: ${json}")
             log.debug("Value received: ${json.value}")
         }
-        if( json?.name == "moisture") {
+        if (json?.name == "moisture") {
             
-            if (json.value >= 900) {
+            if (json.value >= dry) {
             	jvalue = "dry"
             }
             else if (json.value >= 650) {
