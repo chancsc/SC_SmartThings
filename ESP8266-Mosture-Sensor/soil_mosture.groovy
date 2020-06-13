@@ -2,16 +2,17 @@
  *  ESP8266 Soil Moisture Sensor
  *  Device Handler for SmartThings
  *  Version
- *	1.0.0 - initial version
+ *  1.0.0 - initial version
  *  1.0.1 - update the definition if less than 400
  *  1.0.2 - add tile to display sensor value
  *  1.0.3 - add option to define Dry Threshold in settings
+ *  1.0.4 - add options to define Ok & Very Wet Threshold, as different sensor have different min/max reading
  *  Author: Soon Chye 2020
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
  *
  *	    http://www.apache.org/licenses/LICENSE-2.0
-*/
+**/
 
 metadata {
     definition (name: "ESP8266 Moisture Sensor", namespace: "sc", author: "Soon Chye") {
@@ -48,7 +49,9 @@ metadata {
         input("ip", "text", title: "IP Address", description: "ip", required: true)
         input("port", "number", title: "Port", description: "port", default: 80, required: true)
         input("mac", "text", title: "MAC Addr (e.g. AB50E360E123)", description: "mac")
-		input("dryOffset", "number", title: "Dry Threshold (500 - 1024)", description: "Define the Threshold for Dry", range: "500..1024", displayDuringSetup: false, required: true, defaultValue: 900)
+	input("dryOffset", "number", title: "Dry Threshold (600 - 1024)", description: "Define the Threshold for Dry", range: "600..1024", displayDuringSetup: false, required: true, defaultValue: 900)
+        input("okOffset", "number", title: "Ok Threshold (400 - 800)", description: "Define the Threshold for Ok", range: "400..800", displayDuringSetup: false, required: true, defaultValue: 700)
+        input("wetOffset", "number", title: "Wet Threshold (200 - 600)", description: "Define the Threshold for Web", range: "200..600", displayDuringSetup: false, required: true, defaultValue: 500)
     }
 }
 def updated() {
@@ -65,20 +68,21 @@ def parse(String description) {
         log.debug "Setting deviceNetworkId to MAC address ${msg.mac}"
         state.mac = msg.mac
     }
-    
     sendEvent(name: "lastCheckin", value: formatDate(), displayed: false)
     
     def result = []
     def bodyString = msg.body
     def jvalue = ""
-    
-    def dry = 900
-    def ok = 650
-    def wet = 400
-    
-    //overwrite the dry value, get from reference
-    dry = dryOffset
-    
+
+    //if user didn't define the value in reference, then use this default values
+	def dry = dryOffset ?: 900
+    def ok = okOffset ?: 650
+    def wet = wetOffset ?: 450
+
+//    log.debug("dry : ${dry}")
+//    log.debug("ok : ${ok}")
+//    log.debug("wet : ${wet}")
+
     if (bodyString) {
         def json = msg.json;
 		//for debug
@@ -91,10 +95,10 @@ def parse(String description) {
             if (json.value >= dry) {
             	jvalue = "dry"
             }
-            else if (json.value >= 650) {
+            else if (json.value >= ok) {
             	jvalue = "ok"
             }
-            else if (json.value >= 400) {
+            else if (json.value >= wet) {
             	jvalue = "wet"
             }
             else {
