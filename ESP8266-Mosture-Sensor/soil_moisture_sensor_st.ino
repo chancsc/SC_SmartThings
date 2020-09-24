@@ -9,17 +9,12 @@ Version history:
 1.0.3 - added OTA update capability
 1.0.4 - control power supply to sensor via GPIO12 = D6
 1.0.5 - accept SmartThings hub IP & port setup during Wifi setup. Execute everything in the setup, as loop is not req
-1.0.6 - minor code update, to check if st_port and st_ip is not empty, otherwise go back to wifi setup mode
+1.0.6 - minor code update, to check if st_port and st_ip is not empty, otherwise go back to setup mode
 
-Todo software:
+Todo:
 1. Ability to define Wake up freq at runtime
 2. Blink green LED when upload success, red when failed
 3. Customize URL for OTA
-
-Todo hardware:
-1. Add Power supervisor KA75330, so if voltage too low, it will not reset (after deep sleep) and goes into zombie mode
-2. Add POLOLU-2563 Pololu 3.3V Step-Up Voltage Regulator U1V10F3/FBA - if using 2x AA battery
-3. Add reed switch to pull up / down a GPIO to trigger the OTA, otherwise don't check for OTA
 
 References:
 ===========
@@ -50,14 +45,24 @@ OTA Update (must ensure set flash size to at least 1M SPIFFS):
 //Ticker ticker;
 
 //set pin for moisture sensor, A0 is an analog pin on nodemcu, to read analog value from moisture sensor
-#define sensorPin   A0
+#define sensorPin A0
 
 //provide power to the sensor, so it's not always on as the sensor will eroded fast
-const int powerPin = 12; //GPIO12 = D6
+#define powerPin 12 //GPIO12 = D6
+
+//D2/GPIO04 Green (success), D1/GPIO05 (failed) Red
+#define greenLed 04
+#define redLed 05
+
+//check frequency
+int checkFreq = 10; //in mins - wake interval
+
+//current firmware version
+const int FW_VERSION = 1005;
 
 // Smartthings hub information
 IPAddress hubIp; // smartthings hub ip
-unsigned int hubPort = 39500; // smartthings hub port
+int hubPort = 39500; // smartthings hub port
 
 int char2int (char *array, size_t n); 
 
@@ -68,9 +73,6 @@ char st_port[6] = "39500";
 //flag for saving data using wifi manager page
 bool shouldSaveConfig = false;
 
-//current firmware version
-const int FW_VERSION = 1003;
-
 //firmware location
 const char* fwUrlBase = "http://192.168.0.26/esp8266/ota/";
 
@@ -78,11 +80,7 @@ const char* fwUrlBase = "http://192.168.0.26/esp8266/ota/";
 WiFiClient client; //client
 String readString;
 
-//check frequency
-int checkFreq = 5; //in mins - wake interval
-
 void setup() {
-    // put your setup code here, to run once:
     Serial.begin(115200);
     delay(1);
 
@@ -90,16 +88,14 @@ void setup() {
 
     //moisture sensor pin
     pinMode(sensorPin, INPUT);
-  
     //pin to provide power to sensor
     pinMode(powerPin, OUTPUT);
-  
+    //pin to flash the upload status
+    pinMode(greenLed, OUTPUT);
+    pinMode(redLed, OUTPUT);
+
     //read from FS
     readFS();
-
-//    WiFiManager wifiManager;
-//    wifiManager.autoConnect("AutoConnectAP");
-//    Serial.println("connected...yeey :)");
 
     //connect to wifi
     wificonnect();
@@ -111,15 +107,21 @@ void setup() {
     if (sendNotify()) {
       Serial.println("sendNotify completed");
       sendStatusToWeb("sendNotify_completed");
+      digitalWrite(greenLed, HIGH);   // turn the LED on (HIGH is the voltage level)
+      delay(100);                       // wait for a second
+      digitalWrite(greenLed, LOW);    // turn the LED off by making the voltage LOW
     }
     else {
       Serial.println("sendNotify have issue");
+
       sendStatusToWeb("sendNotify_failed");
+      digitalWrite(redLed, HIGH);   // turn the LED on (HIGH is the voltage level)
+      delay(100);                       // wait for a second
+      digitalWrite(redLed, LOW);    // turn the LED off by making the voltage LOW
     }
 
     // Deep sleep mode for 30 seconds
     //the ESP8266 wakes up by itself when GPIO 16 (D0 in NodeMCU/Wemos board) is connected to the RESET pin
-
     Serial.print("I'm going into deep sleep mode for ");
     Serial.print(checkFreq);
     Serial.println(" mins");
@@ -133,7 +135,6 @@ void setup() {
 
 void loop() {
     // put your main code here, to run repeatedly:
-    
 }
 
 //gets called when WiFiManager enters configuration mode
@@ -148,7 +149,7 @@ void configModeCallback (WiFiManager *myWiFiManager) {
 
 void readFS(){
   //read configuration from FS json
-  Serial.println("mounting FS...");
+    Serial.println("mounting FS...");
 
   if (SPIFFS.begin()) {
     Serial.println("mounted file system");
@@ -168,7 +169,6 @@ void readFS(){
         json.printTo(Serial);
         if (json.success()) {
           Serial.println("\nparsed json");
-
           strcpy(st_hub, json["st_hub"]);
           strcpy(st_port, json["st_port"]);
 
@@ -186,12 +186,6 @@ void readFS(){
 
 
 void wificonnect(){
-//  WiFi.forceSleepWake();
-//  delay(100);
-  //Disable the WiFi persistence.  The ESP8266 will not load and save WiFi settings in the flash memory.
-//  WiFi.persistent( true );
-//  WiFi.mode (WIFI_STA);
-
 //  //set led pin as output
 //  pinMode(BUILTIN_LED, OUTPUT);
 //  // start ticker with 0.5 because we start in AP mode and try to connect
@@ -213,8 +207,6 @@ void wificonnect(){
   //add all your parameters here
   wifiManager.addParameter(&custom_st_hub);
   wifiManager.addParameter(&custom_st_port);
-
-//  wifiManager.autoConnect("Soil_Moisture_Sensor", "configme");  
 
   //set callback that gets called when connecting to previous WiFi fails, and enters Access Point mode
   wifiManager.setAPCallback(configModeCallback);
@@ -272,15 +264,6 @@ if (strlen(st_hub) == 0 || strlen(st_port) == 0) {
     //end save
   }
 
-//  WiFi.begin(ssid, password);
-//  Serial.print("Connecting to wifi...");
-//  while (WiFi.status() != WL_CONNECTED) {
-//    delay(500);
-//    Serial.print(".");
-//  }
-//  Serial.println("Connected!");
-//  Serial.print( "Assigned IP address: " );
-//  Serial.println( WiFi.localIP() );
 }
 
 
@@ -461,9 +444,7 @@ void sendStatusToWeb(String sts)
   
   httpClient.begin( url );
 
-  int httpCode = httpClient.GET(); 
-//  Serial.println( "sending to " );
-
+  int httpCode = httpClient.GET();
 
   httpClient.end();
   
