@@ -9,19 +9,17 @@
 //  Measurement read command is delayed,
 //  By repeatedly checking the "measuring" bit of status register (0xF3) until ready
 
-//  Last updated on 12/02/2019
-
 //  Features :  //////////////////////////////////////////////////////////////////////////////////////////////////////
 /*                                                                                                                      
 1. Connect to Wi-Fi, and upload the data to either Blynk App  or Thingspeak
 2. Monitoring Weather parameters like Temperature, Pressure, Humidity and Altitude.
 3. Extra Ports to add more Weather Sensors like UV Index, Light and Rain Guage etc.
 4. Remote Battery Status Monitoring
-5. V2.0 Using Sleep mode to reduce the energy consumed
-6. v2.2 Modify to add GY-1145 UV sensor & DHT22 & do it as option in code (CSC)
+5. Using Sleep mode to reduce the energy consumed
+6. v2.1 Modify to add GY-1145 UV sensor & DHT22 & do it as option in code (CSC)
 7. v2.2 Add tzapu/WifiManger, allow user to enter Blynk authentication code or Thinkspeak API,
         only allow to enter either one, if both detected, only use the Blynk
-
+8. v2.3 Add Double Reset Detector - to detect double press on reset button and wipe the wifi settings
 */
 
 // Todo
@@ -36,7 +34,8 @@
 #include <Wire.h>
 #include <farmerkeith_BMP280.h> // library, download from https://github.com/farmerkeith/BMP280-library
 #include <ArduinoJson.h>          //https://github.com/bblanchon/ArduinoJson
-
+#include <BlynkSimpleEsp8266.h>
+#include <DoubleResetDetector.h>
 
 // configuration constants
 const bool bme280Debug = 0; // controls serial printing
@@ -54,7 +53,6 @@ Adafruit_SI1145 uv = Adafruit_SI1145(); // create object for UVSensor
 String App = "";  //Enable based on value (Blynk authentication code or ThinkSpeak Api Key enter by user)
 
 #define BLYNK_PRINT Serial    // Comment this out to disable prints and save space
-#include <BlynkSimpleEsp8266.h>
 
 bme280 bme0 (0, bme280Debug) ; // creates object bme0 of type bme280, base address, or BMP280
 
@@ -101,6 +99,15 @@ float hic = 0; // Compute heat index in Celsius
 WiFiClient client; //client
 String readString;
 
+// Number of seconds after reset during which a 
+// subseqent reset will be considered a double reset.
+#define DRD_TIMEOUT 10
+
+// RTC Memory Address for the DoubleResetDetector to use
+#define DRD_ADDRESS 0
+
+DoubleResetDetector drd(DRD_TIMEOUT, DRD_ADDRESS);
+
 //callback notifying us of the need to save config
 void saveConfigCallback () {
   Serial.println("Should save config");
@@ -133,6 +140,10 @@ void setup() {
   //  eventCounter ++;
   //  saveCounter(eventCounter);         // this also puts bme0 to sleep
   bme0.updateF4Control16xSleep(); // use instead of saveCounter if counter is not required
+
+  // You can also call drd.stop() when you wish to no longer
+  drd.stop();
+  
   goToSleep();
 } // end of void setup()
 
@@ -203,6 +214,16 @@ void wificonnect(){
   //Local intialization. Once its business is done, there is no need to keep it around
   WiFiManager wifiManager;
 
+  if (drd.detectDoubleReset()) {
+    Serial.println("Double Reset Detected");
+    //shall do clean up of API key after wifi reset
+      wifiManager.resetSettings();
+      ESP.reset();
+      delay(1000);
+  } else {
+    Serial.println("No Double Reset Detected");
+  }
+
   //set config save notify callback
   wifiManager.setSaveConfigCallback(saveConfigCallback);
 
@@ -235,7 +256,7 @@ void wificonnect(){
       ESP.reset();
       delay(1000);
     }
-    
+
   //save the custom parameters to FS
   if (shouldSaveConfig) {
     Serial.println("saving config");
