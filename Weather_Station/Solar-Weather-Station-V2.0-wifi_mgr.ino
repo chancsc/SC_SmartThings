@@ -1,7 +1,7 @@
 //----------------------------------------------------------------------------------------------------
-//  Project Name : Solar Powered WiFi Weather Station V2.0
+//  Project Name : Solar Powered WiFi Weather Station V2.0 (original)
 //  Authors: Keith Hungerford and Debasish Dutta
-//  Website : www.opengreenenergy.com
+//  Website : www.opengreenenergy.com (https://www.instructables.com/id/Solar-Powered-WiFi-Weather-Station-V20/)
 //  This code is derived from the example code of farmerkeith_BMP280.h library  
 //  Download the library from https://github.com/farmerkeith/BMP280-library
 //  Main microcontroller (ESP8266) and BME280 both sleep between measurements
@@ -9,8 +9,9 @@
 //  Measurement read command is delayed,
 //  By repeatedly checking the "measuring" bit of status register (0xF3) until ready
 
-//  Features :  //////////////////////////////////////////////////////////////////////////////////////////////////////
 /*                                                                                                                      
+   Release Note:
+   =============
 1. Connect to Wi-Fi, and upload the data to either Blynk App  or Thingspeak
 2. Monitoring Weather parameters like Temperature, Pressure, Humidity and Altitude.
 3. Extra Ports to add more Weather Sensors like UV Index, Light and Rain Guage etc.
@@ -22,11 +23,13 @@
 7. v2.2 Add tzapu/WifiManger, allow user to enter Blynk authentication code or Thinkspeak API,
         only allow to enter either one, if both detected, only use the Blynk
 8. v2.3 Add Double Reset Detector - to detect double press on reset button and wipe the wifi settings
+9. v2.4 Define wake up interval - to save battery, default 10 mins, during wifi setup
+
+
+Todo
+* Option to specify option to enable (Y/N) during wifi setup
+* add OTA update function
 */
-
-// Todo
-// add OTA function
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include <FS.h>                   //this needs to be first, or it all crashes and burns...
@@ -44,7 +47,7 @@ const bool bme280Debug = 0; // controls serial printing
 // set to 1 to enable printing of BME280 or BMP280 transactions
 
 // configure period between reports
-const long measurementInterval = 30000;  // measurement interval in ms
+//const long measurementInterval = 30000;  // measurement interval in ms
 
 // for UV index, set to true if using
 const bool UVSensor = false;
@@ -74,6 +77,10 @@ const char* server = "api.thingspeak.com";
 //define your default values here, if there are different values in config.json, they are overwritten.
 char Blynk_Token[33] = "";
 char ThinkSpeak_Api_Key[17] = "";
+char strSleep_Time[3] = "10";
+
+//Sleep freq in mins
+int Sleep_Time = 10;
 
 //flag for saving data using wifi manager page
 bool shouldSaveConfig = false;
@@ -200,6 +207,7 @@ void wificonnect(){
   // id/name placeholder/prompt default length
   WiFiManagerParameter custom_Blynk_Token("Blynk", "Blynk Authentication Token", Blynk_Token, 33);
   WiFiManagerParameter custom_ThinkSpeak_Api_Key("ThinkSpeak", "ThinkSpeak Api Key", ThinkSpeak_Api_Key, 17);
+  WiFiManagerParameter custom_Sleep_Time("strSleep_Time", "Sleep Time", strSleep_Time, 2);
 
   //WiFiManager
   //Local intialization. Once its business is done, there is no need to keep it around
@@ -221,6 +229,7 @@ void wificonnect(){
   //add all your parameters here
   wifiManager.addParameter(&custom_Blynk_Token);
   wifiManager.addParameter(&custom_ThinkSpeak_Api_Key);
+  wifiManager.addParameter(&custom_Sleep_Time);
 
   //set callback that gets called when connecting to previous WiFi fails, and enters Access Point mode
   wifiManager.setAPCallback(configModeCallback);
@@ -240,6 +249,7 @@ void wificonnect(){
   //read updated parameters
   strcpy(Blynk_Token, custom_Blynk_Token.getValue());
   strcpy(ThinkSpeak_Api_Key, custom_ThinkSpeak_Api_Key.getValue());
+  strcpy(strSleep_Time, custom_Sleep_Time.getValue());
 
   if (strlen(Blynk_Token) == 0 && strlen(ThinkSpeak_Api_Key) == 0) {
       Serial.println("Failed to get Blynk Token or ThinkSpeak Api Key from FS, go back to setup mode..");
@@ -248,6 +258,18 @@ void wificonnect(){
       delay(1000);
     }
 
+  if (strlen(strSleep_Time) == 0) {
+    String tmp = "10";
+    tmp.toCharArray(strSleep_Time, 3);
+  }
+  else
+  {
+    Sleep_Time = atoi(strSleep_Time);
+  }
+
+  Serial.print("Sleep_Time = ");
+  Serial.println(Sleep_Time);
+
   //save the custom parameters to FS
   if (shouldSaveConfig) {
     Serial.println("saving config");
@@ -255,6 +277,7 @@ void wificonnect(){
     JsonObject& json = jsonBuffer.createObject();
     json["Blynk_Token"] = Blynk_Token;
     json["ThinkSpeak_Api_Key"] = ThinkSpeak_Api_Key;
+    json["Sleep_Time"] = strSleep_Time;
 
     File configFile = SPIFFS.open("/config.json", "w");
     if (!configFile) {
@@ -299,7 +322,7 @@ void wificonnect(){
     App = "Thingspeak";
   }
 
-  Serial.print("App = ");
+  Serial.print("\nApp = ");
   Serial.println(App);
 
 }
