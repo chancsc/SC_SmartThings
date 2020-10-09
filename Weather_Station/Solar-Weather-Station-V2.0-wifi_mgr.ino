@@ -25,6 +25,7 @@
 8. v2.3 Add Double Reset Detector - to detect double press on reset button and wipe the wifi settings
 9. v2.4 Define wake up interval - to save battery, default 10 mins, during wifi setup
 10. v2.5 replace DoubleResetDetector with ESP_DoubleResetDetector (bug randomly caused wifi settings disappeared)
+11. v.2.51 remove doubleresetdetector, caused unknown problem 
 
 Todo
 * Option to specify option to enable (Y/N) DHT22, UV sensor during wifi setup
@@ -42,9 +43,9 @@ Todo
 #include <BlynkSimpleEsp8266.h>
 
 //#include <DoubleResetDetector.h>   //<<-- got bug, auto wipe of wifi manager settings happened
-#define ESP_DRD_USE_LITTLEFS    true    //false
-#define DOUBLERESETDETECTOR_DEBUG       true  //false
-#include <ESP_DoubleResetDetector.h>
+//#define ESP_DRD_USE_LITTLEFS    true    //false
+//#define DOUBLERESETDETECTOR_DEBUG       true  //false
+//#include <ESP_DoubleResetDetector.h>
 
 // configuration constants
 const bool bme280Debug = 0; // controls serial printing
@@ -108,12 +109,12 @@ String readString;
 
 // Number of seconds after reset during which a 
 // subseqent reset will be considered a double reset.
-#define DRD_TIMEOUT 10
+//#define DRD_TIMEOUT 10
 
 // RTC Memory Address for the DoubleResetDetector to use
-#define DRD_ADDRESS 0
+//#define DRD_ADDRESS 0
 
-DoubleResetDetector* drd;
+//DoubleResetDetector* drd;
 
 //callback notifying us of the need to save config
 void saveConfigCallback () {
@@ -148,8 +149,11 @@ void setup() {
   //  saveCounter(eventCounter);         // this also puts bme0 to sleep
   bme0.updateF4Control16xSleep(); // use instead of saveCounter if counter is not required
 
+  // Call the double reset detector loop method every so often,
+  // so that it can recognise when the timeout expires.
   // You can also call drd.stop() when you wish to no longer
-  drd->loop();
+  // consider the next reset as a double reset.
+//  drd->loop();
   
   goToSleep();
 } // end of void setup()
@@ -217,18 +221,18 @@ void wificonnect(){
   //Local intialization. Once its business is done, there is no need to keep it around
   WiFiManager wifiManager;
 
-  drd = new DoubleResetDetector(DRD_TIMEOUT, DRD_ADDRESS);
-  if (drd->detectDoubleReset()) 
-  {
-    Serial.println("Double Reset Detected");
-    wifiManager.resetSettings();
-    ESP.reset();
-    delay(1000);
-  } 
-  else 
-  {
-    Serial.println("No Double Reset Detected");
-  }
+//  drd = new DoubleResetDetector(DRD_TIMEOUT, DRD_ADDRESS);
+//  if (drd->detectDoubleReset()) 
+//  {
+//    Serial.println("Double Reset Detected");
+//    wifiManager.resetSettings();
+//    ESP.reset();
+//    delay(1000);
+//  } 
+//  else 
+//  {
+//    Serial.println("No Double Reset Detected");
+//  }
 
   //set config save notify callback
   wifiManager.setSaveConfigCallback(saveConfigCallback);
@@ -245,9 +249,9 @@ void wificonnect(){
   wifiManager.setConfigPortalTimeout(60);
 
   if (!wifiManager.autoConnect("Weather Station", "configme")) {
-    Serial.println("failed to connect and hit timeout");
-    ESP.deepSleep(Sleep_Time * 60 * 1000000); //deepSleep is microseconds 1 sec = 1000000
-    delay(100);    
+    Serial.println("failed to connect to Wifi, AP mode started");
+//    drd->loop(); //don't trigger double press reset
+    goToSleep(); 
 //    ESP.reset();
 //    delay(1000);
   }
@@ -309,6 +313,7 @@ void wificonnect(){
         Serial.println("Blynk Connection Fail");
         //needs testing on whether this line should be commented out:
         //wifiManager.resetSettings();
+//        drd->loop(); //don't trigger double press reset
         ESP.reset();
         delay (100);
       }
@@ -319,6 +324,7 @@ void wificonnect(){
       //Connect to blynk using an already-open internet connection and preset configuration
       if(!Blynk.connect()) {
         Serial.println("Blynk connection timed out.");
+//        drd->loop(); //don't trigger double press reset
         ESP.reset();
         delay (100);
       }
