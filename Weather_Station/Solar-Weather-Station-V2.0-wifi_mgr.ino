@@ -24,10 +24,10 @@
         only allow to enter either one, if both detected, only use the Blynk
 8. v2.3 Add Double Reset Detector - to detect double press on reset button and wipe the wifi settings
 9. v2.4 Define wake up interval - to save battery, default 10 mins, during wifi setup
-
+10. v2.5 replace DoubleResetDetector with ESP_DoubleResetDetector (bug randomly caused wifi settings disappeared)
 
 Todo
-* Option to specify option to enable (Y/N) during wifi setup
+* Option to specify option to enable (Y/N) DHT22, UV sensor during wifi setup
 * add OTA update function
 */
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,7 +40,11 @@ Todo
 #include <farmerkeith_BMP280.h> // library, download from https://github.com/farmerkeith/BMP280-library
 #include <ArduinoJson.h>          //https://github.com/bblanchon/ArduinoJson
 #include <BlynkSimpleEsp8266.h>
-#include <DoubleResetDetector.h>
+
+//#include <DoubleResetDetector.h>   //<<-- got bug, auto wipe of wifi manager settings happened
+#define ESP_DRD_USE_LITTLEFS    true    //false
+#define DOUBLERESETDETECTOR_DEBUG       true  //false
+#include <ESP_DoubleResetDetector.h>
 
 // configuration constants
 const bool bme280Debug = 0; // controls serial printing
@@ -109,7 +113,7 @@ String readString;
 // RTC Memory Address for the DoubleResetDetector to use
 #define DRD_ADDRESS 0
 
-DoubleResetDetector drd(DRD_TIMEOUT, DRD_ADDRESS);
+DoubleResetDetector* drd;
 
 //callback notifying us of the need to save config
 void saveConfigCallback () {
@@ -145,7 +149,7 @@ void setup() {
   bme0.updateF4Control16xSleep(); // use instead of saveCounter if counter is not required
 
   // You can also call drd.stop() when you wish to no longer
-  drd.stop();
+  drd->loop();
   
   goToSleep();
 } // end of void setup()
@@ -213,13 +217,16 @@ void wificonnect(){
   //Local intialization. Once its business is done, there is no need to keep it around
   WiFiManager wifiManager;
 
-  if (drd.detectDoubleReset()) {
+  drd = new DoubleResetDetector(DRD_TIMEOUT, DRD_ADDRESS);
+  if (drd->detectDoubleReset()) 
+  {
     Serial.println("Double Reset Detected");
-    //shall do clean up of API key after wifi reset
-      wifiManager.resetSettings();
-      ESP.reset();
-      delay(1000);
-  } else {
+    wifiManager.resetSettings();
+    ESP.reset();
+    delay(1000);
+  } 
+  else 
+  {
     Serial.println("No Double Reset Detected");
   }
 
@@ -235,13 +242,14 @@ void wificonnect(){
   wifiManager.setAPCallback(configModeCallback);
 
   //timeout - this will quit WiFiManager if it's not configured in 3 minutes, causing a restart
-  wifiManager.setConfigPortalTimeout(180);
+  wifiManager.setConfigPortalTimeout(60);
 
   if (!wifiManager.autoConnect("Weather Station", "configme")) {
     Serial.println("failed to connect and hit timeout");
-    //reset and try again, or maybe put it to deep sleep
-    ESP.reset();
-    delay(1000);
+    ESP.deepSleep(Sleep_Time * 60 * 1000000); //deepSleep is microseconds 1 sec = 1000000
+    delay(100);    
+//    ESP.reset();
+//    delay(1000);
   }
 
   Serial.println("Wifi Connected");
