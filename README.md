@@ -1,2 +1,2 @@
 # smartthings
-My SmartThings Project
+My Smart Home Project
